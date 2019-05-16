@@ -239,26 +239,25 @@ add_mirror(QName, MirrorNode, SyncMode) ->
               rabbit_misc:const(ok),
               fun () ->
                     #resource{virtual_host = VHost} = amqqueue:get_name(Q),
-                    case
-                        {rabbit_vhost_sup_sup:get_vhost_sup(VHost, MirrorNode),
-                         rabbit_amqqueue_sup_sup:find_for_vhost(VHost, MirrorNode)
-                         } of
-                        {{ok, _}, {ok, QueueSup}} ->
-                            SPid = rabbit_amqqueue_sup_sup:start_queue_process(
-                                       QueueSup, MirrorNode, Q, slave),
-                            log_info(QName, "Adding mirror on node ~p: ~p~n",
-                                     [MirrorNode, SPid]),
-                            rabbit_mirror_queue_slave:go(SPid, SyncMode);
-                        {{error, Error}, _} ->
+                    case rabbit_vhost_sup_sup:get_vhost_sup(VHost, MirrorNode) of
+                        {ok, _} ->
+                            case catch rabbit_amqqueue_sup_sup:start_queue_process(
+                                       MirrorNode, Q, slave) of
+                                SPid when is_pid(SPid) ->
+                                    log_info(QName, "Adding mirror on node ~p: ~p~n",
+                                        [MirrorNode, SPid]),
+                                    rabbit_mirror_queue_slave:go(SPid, SyncMode);
+                                {'EXIT', _, Reason} ->
+                                    log_warning(QName,
+                                        "Unable to start queue mirror on node '~p'. "
+                                        "Queue supervisor is not running: ~p~n",
+                                        [MirrorNode, Reason]),
+                                    ok
+                            end;
+                        {error, Error} ->
                             log_warning(QName,
                                         "Unable to start queue mirror on node '~p'. "
                                         "Target virtual host is not running: ~p~n",
-                                        [MirrorNode, Error]),
-                            ok;
-                        {_, {error, Error}} ->
-                            log_warning(QName,
-                                        "Unable to start queue mirror on node '~p'. "
-                                        "Queue supervisor is not running: ~p~n",
                                         [MirrorNode, Error]),
                             ok
                     end

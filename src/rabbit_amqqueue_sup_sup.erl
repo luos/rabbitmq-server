@@ -18,7 +18,7 @@
 
 -behaviour(supervisor2).
 
--export([start_link/0, start_queue_process/3, start_queue_process/4]).
+-export([start_link/0, start_queue_process/3]).
 -export([start_for_vhost/1, stop_for_vhost/1,
          find_for_vhost/2, find_for_vhost/1]).
 
@@ -40,15 +40,10 @@ start_link() ->
             pid().
 
 start_queue_process(Node, Q, StartMode) ->
-    {ok, Sup} = find_for_vhost(VHost, Node),
-    {ok, QPid} = start_queue_process(Sup, Node, Q, StartMode),
-    QPid.
-
-start_queue_process(QueueSup, Node, Q, StartMode) ->
     #resource{virtual_host = VHost} = amqqueue:get_name(Q),
-    {ok, Sup} = QueueSup,
+    {ok, Sup} = find_for_vhost(VHost, Node),
     {ok, _SupPid, QPid} = supervisor2:start_child(Sup, [Q, StartMode]),
-    {ok, QPid}.
+    QPid.
 
 init([]) ->
     {ok, {{simple_one_for_one, 10, 10},

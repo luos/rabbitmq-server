@@ -586,8 +586,7 @@ handle_info({nodeup, Node, _Info}, State) ->
 
 handle_info({mnesia_system_event,
              {inconsistent_database, running_partitioned_network, Node}},
-            State = #state{partitions = Partitions,
-                           monitors   = Monitors}) ->
+            State = #state{monitors   = Monitors}) ->
     %% We will not get a node_up from this node - yet we should treat it as
     %% up (mostly).
     State1 = case pmon:is_monitored({rabbit, Node}, Monitors) of
@@ -596,12 +595,11 @@ handle_info({mnesia_system_event,
                             monitors = pmon:monitor({rabbit, Node}, Monitors)}
              end,
     ok = handle_live_rabbit(Node),
-    Partitions1 = lists:usort([Node | Partitions]),
-    {noreply, maybe_autoheal(State1#state{partitions = Partitions1})};
+    CurrentPartitions = rabbit_mnesia:local_mnesia_partitioned_from(),
+    {noreply, maybe_autoheal(State1#state{partitions = CurrentPartitions})};
 
-handle_info({autoheal_msg, Msg}, State = #state{autoheal   = AState,
-                                                partitions = Partitions}) ->
-    AState1 = rabbit_autoheal:handle_msg(Msg, AState, Partitions),
+handle_info({autoheal_msg, Msg}, State = #state{autoheal   = AState}) ->
+    AState1 = rabbit_autoheal:handle_msg(Msg, AState),
     {noreply, State#state{autoheal = AState1}};
 
 handle_info(ping_down_nodes, State) ->

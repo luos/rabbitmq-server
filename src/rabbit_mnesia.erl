@@ -33,6 +33,7 @@
          node_type/0,
          dir/0,
          cluster_status_from_mnesia/0,
+         local_mnesia_partitioned_from/0,
 
          init_db_unchecked/2,
          copy_db/1,
@@ -416,6 +417,18 @@ status() ->
 mnesia_partitions(Nodes) ->
     Replies = rabbit_node_monitor:partitions(Nodes),
     [Reply || Reply = {_, R} <- Replies, R =/= []].
+
+local_mnesia_partitioned_from() ->
+    RunningNodes = cluster_nodes(all),
+    {Replies, _BadNodes} =
+        rpc:multicall(RunningNodes, mnesia_monitor, has_remote_mnesia_down, [node()]),
+    lists:filtermap(
+        fun(Reply) ->
+            case Reply of
+                {true, RemoteNode} -> {true, RemoteNode};
+                _ -> false
+            end
+        end, Replies).
 
 is_running() -> mnesia:system_info(is_running) =:= yes.
 

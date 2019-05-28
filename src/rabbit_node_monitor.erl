@@ -355,9 +355,10 @@ init([]) ->
     Monitors = lists:foldl(fun(Node, Monitors0) ->
                                    pmon:monitor({rabbit, Node}, Monitors0)
                            end, pmon:new(), Nodes),
+    CurrentPartitions = rabbit_mnesia:local_mnesia_partitioned_from(),
     {ok, ensure_keepalive_timer(#state{monitors    = Monitors,
                                        subscribers = pmon:new(),
-                                       partitions  = [],
+                                       partitions  = CurrentPartitions,
                                        guid        = rabbit_guid:gen(),
                                        node_guids  = maps:new(),
                                        autoheal    = rabbit_autoheal:init()})}.

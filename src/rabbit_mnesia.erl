@@ -418,6 +418,10 @@ mnesia_partitions(Nodes) ->
     Replies = rabbit_node_monitor:partitions(Nodes),
     [Reply || Reply = {_, R} <- Replies, R =/= []].
 
+%% @doc Checks if the local node is partitioned from all other known nodes
+%% by calling the other node and checking if it sees us as down.
+%% See more at https://github.com/erlang/otp/blob/d6285b0a347b9489ce939511ee9a979acd868f71/lib/mnesia/src/mnesia_monitor.erl#L818-L822
+%% RabbitMQ doesn't have a mnesisa master node, so we don't need to check that.
 local_mnesia_partitioned_from() ->
     RunningNodes = cluster_nodes(all),
     {Replies, _BadNodes} =

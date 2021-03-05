@@ -736,7 +736,6 @@ handle_info({'DOWN', MRef, process, Pid, Reason},
         %% by a partial partition; in which case by the time we record the
         %% member death in Mnesia we will probably be in a full
         %% partition and will not be assassinating another member.
-        timer:sleep(100),
         wait_for_mnesia(Pid, GroupName, Reason),
 
         check_membership(GroupName),

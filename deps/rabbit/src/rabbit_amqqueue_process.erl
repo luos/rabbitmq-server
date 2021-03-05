@@ -1721,6 +1721,7 @@ handle_info(timeout, State) ->
     noreply(backing_queue_timeout(State));
 
 handle_info({'EXIT', _Pid, Reason}, State) ->
+    lager:error("Queue ~p stopping, received exit from ~p ~p", [qname(State), _Pid, Reason]),
     {stop, Reason, State};
 
 handle_info({bump_credit, Msg}, State = #q{backing_queue       = BQ,

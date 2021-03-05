@@ -708,7 +708,7 @@ handle_cast(leave, State) ->
 
 handle_info(force_gc, State) ->
     garbage_collect(),
-    noreply(State #state { force_gc_timer = undefined });
+    {noreply, State #state { force_gc_timer = undefined }, flush_timeout(State)};
 
 handle_info(flush, State) ->
     noreply(
@@ -721,7 +721,7 @@ handle_info({'DOWN', _MRef, process, _Pid, _Reason},
             State = #state { shutting_down =
                                  {true, {shutdown, ring_shutdown}} }) ->
     noreply(State);
-handle_info({'DOWN', MRef, process, _Pid, Reason},
+handle_info({'DOWN', MRef, process, Pid, Reason},
             State = #state { self          = Self,
                              left          = Left,
                              right         = Right,
@@ -729,6 +729,16 @@ handle_info({'DOWN', MRef, process, _Pid, Reason},
                              confirms      = Confirms,
                              txn_executor  = TxnFun }) ->
     try
+        %% In the event of a partial partition we could see another member
+        %% go down and then remove them from Mnesia. While they can
+        %% recover from this they'd have to restart the queue - not
+        %% ideal. So let's sleep here briefly just in case this was caused
+        %% by a partial partition; in which case by the time we record the
+        %% member death in Mnesia we will probably be in a full
+        %% partition and will not be assassinating another member.
+        timer:sleep(100),
+        wait_for_mnesia(Pid, GroupName, Reason),
+
         check_membership(GroupName),
         Member = case {Left, Right} of
                      {{Member1, MRef}, _} -> Member1;
@@ -741,14 +751,7 @@ handle_info({'DOWN', MRef, process, _Pid, Reason},
             {_, {shutdown, ring_shutdown}} ->
                 noreply(State);
             _ ->
-                %% In the event of a partial partition we could see another member
-                %% go down and then remove them from Mnesia. While they can
-                %% recover from this they'd have to restart the queue - not
-                %% ideal. So let's sleep here briefly just in case this was caused
-                %% by a partial partition; in which case by the time we record the
-                %% member death in Mnesia we will probably be in a full
-                %% partition and will not be assassinating another member.
-                timer:sleep(100),
+                
                 View1 = group_to_view(record_dead_member_in_group(Self,
                                         Member, GroupName, TxnFun, true)),
                 handle_callback_result(
@@ -763,6 +766,7 @@ handle_info({'DOWN', MRef, process, _Pid, Reason},
         end
     catch
         lost_membership ->
+            lager:error("Lost membership ~p", [GroupName]),
             {stop, shutdown, State}
     end;
 handle_info(_, State) ->
@@ -1124,7 +1128,8 @@ read_group(GroupName) ->
         [Group] -> Group
     end.
 
-write_group(Group) -> mnesia:write(?GROUP_TABLE, Group, write), Group.
+write_group(Group) -> 
+    mnesia:write(?GROUP_TABLE, Group, write), Group.
 
 prune_or_create_group(Self, GroupName, TxnFun) ->
     TxnFun(
@@ -1648,3 +1653,28 @@ check_group({error, not_found}) ->
     throw(lost_membership);
 check_group(Any) ->
     Any.
+
+-spec needs_to_wait(atom()) -> boolean().
+% Mirror process started in parallel?
+needs_to_wait(normal) -> false;
+%needs_to_wait(shutdown) -> false;
+% We lost connection to the node, we wait for mnesia to form a partition
+needs_to_wait(noconnection) -> true;
+needs_to_wait(_AnyReason) -> false.
+
+
+wait_for_mnesia(Pid, GroupName, _Reason) -> 
+    case needs_to_wait(_Reason) of 
+        true -> 
+            DownNode = node(Pid),
+            RunningMnesiaNodes = rabbit_mnesia:cluster_nodes(running),
+            case lists:member(DownNode, RunningMnesiaNodes) of 
+                true ->
+                    timer:sleep(1000),
+                    wait_for_mnesia(Pid, GroupName, _Reason);
+                false -> 
+                    ok
+            end;
+        false -> 
+            ok
+    end.

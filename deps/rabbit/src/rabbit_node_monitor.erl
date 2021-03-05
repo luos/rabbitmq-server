@@ -648,6 +648,7 @@ terminate(_Reason, State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+
 %%----------------------------------------------------------------------------
 %% Functions that call the module specific hooks when nodes go up/down
 %%----------------------------------------------------------------------------
@@ -834,8 +835,12 @@ del_node(Node, Nodes) -> Nodes -- [Node].
 cast(Node, Msg) -> gen_server:cast({?SERVER, Node}, Msg).
 
 upgrade_to_full_partition(Proxy) ->
-    cast(Proxy, {partial_partition_disconnect, node()}),
-    disconnect(Proxy).
+    application:set_env(kernel, dist_auto_connect, never),
+    spawn(fun() ->  
+        rpc:call(Proxy, application,set_env, [kernel, dist_auto_connect, never]),
+        cast(Proxy, {partial_partition_disconnect, node()}),
+        disconnect(Proxy)
+    end).
 
 %% When we call this, it's because we want to force Mnesia to detect a
 %% partition. But if we just disconnect_node/1 then Mnesia won't

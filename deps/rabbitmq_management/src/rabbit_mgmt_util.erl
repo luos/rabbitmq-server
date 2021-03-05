@@ -674,7 +674,7 @@ pget_bin(Key, Map, Default) when is_map(Map) ->
     maps:get(Key, Map, Default);
 pget_bin(Key, List, Default) when is_list(List) ->
     case lists:partition(fun ({K, _V}) -> a2b(K) =:= Key end, List) of
-        {[{_K, V}], _} -> V;
+        {[{_K, V}| _], _} -> V;
         {[],        _} -> Default
     end.
 maybe_pagination(Item, false, ReqData) ->

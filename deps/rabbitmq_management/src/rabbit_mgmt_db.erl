@@ -732,7 +732,8 @@ created_stats_delegated(Type) ->
 
 -spec delegate_invoke(mfargs()) -> [any()].
 delegate_invoke(FunOrMFA) ->
-    MemberPids = [P || P <- pg2:get_members(management_db)],
+    Running = rabbit_mnesia:cluster_nodes(running),
+    MemberPids = [P || P <- pg2:get_members(management_db), lists:member(node(P), Running)],
     {Results, Errors} = delegate:invoke(MemberPids, ?DELEGATE_PREFIX, FunOrMFA),
     case Errors of
         [] -> ok;

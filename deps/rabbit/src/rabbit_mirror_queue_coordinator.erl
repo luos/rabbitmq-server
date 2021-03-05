@@ -358,6 +358,9 @@ handle_cast({gm_deaths, DeadGMPids}, State = #state{q = Q}) when ?amqqueue_pid_r
             %% NOTE: Reported deaths here, could be inconsistent.
             rabbit_mirror_queue_misc:report_deaths(MPid, false, QueueName,
                                                    DeadPids),
+            rabbit_log:error("We are a duplicated master, stopping ~p other: ~p (~p)", 
+                                [QueueName, _MPid0, node(_MPid0)
+        ]),
             {stop, shutdown, State};
         {error, not_found} ->
             {stop, normal, State};
